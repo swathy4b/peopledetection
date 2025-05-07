@@ -232,28 +232,35 @@ def update_analytics_history(count, timestamp):
 
 def generate_frames():
     camera = cv2.VideoCapture(0)
-    while True:
-        success, frame = camera.read()
-        if not success:
-            break
-        else:
-            # Convert the BGR image to RGB
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
-            # Process the frame with MediaPipe
-            results = face_detection.process(rgb_frame)
-            
-            # Draw face detections
-            if results.detections:
-                for detection in results.detections:
-                    mp_drawing.draw_detection(frame, detection)
-            
-            # Convert the frame to JPEG
-            ret, buffer = cv2.imencode('.jpg', frame)
-            frame = buffer.tobytes()
-            
+    if not camera.isOpened():
+        # Create a black test image with a message
+        test_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+        cv2.putText(test_frame, "No Camera Available", (50, 240),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        ret, buffer = cv2.imencode('.jpg', test_frame)
+        frame = buffer.tobytes()
+        while True:
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+    else:
+        while True:
+            success, frame = camera.read()
+            if not success:
+                break
+            else:
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                results = face_detection.process(rgb_frame)
+                if results.detections:
+                    for detection in results.detections:
+                        mp_drawing.draw_detection(frame, detection)
+                ret, buffer = cv2.imencode('.jpg', frame)
+                frame = buffer.tobytes()
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.route('/')
+def home():
+    return 'Python backend is running! Try /status for JSON or /feed for a test image stream.'
 
 @app.route('/feed')
 def video_feed():
